@@ -9,17 +9,14 @@ import pickle
 import mediapipe as mp
 import time
 
-# [OPTIMIZATION] Configuration Constants
 SKIP_BLINK_FRAMES = 2
 SKIP_RECOG_FRAMES = 10
 PROCESS_SCALE = 0.5
 
-# [FILE SIZE FIX] Only capture every 10th frame to get variety
 TRAINING_SKIP = 10
-# [FILE SIZE FIX] Stop strictly after 15-20 samples. 60 is overkill.
+
 MAX_SAMPLES = 20
 
-# --- MEDIAPIPE SETUP ---
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh_detector = mp_face_mesh.FaceMesh(
     max_num_faces=1,
@@ -32,8 +29,6 @@ svm_model = SVC(kernel='linear', probability=True, C=1.0)
 scaler = StandardScaler()
 
 try:
-    # [FILE SIZE FIX] Reduced grid_x/grid_y from 8 to 5.
-    # This shrinks the histogram size for EACH image by ~60%.
     lbph_model = cv2.face.LBPHFaceRecognizer_create(radius=1, neighbors=8, grid_x=5, grid_y=5)
 except AttributeError:
     print("[ERROR] Install 'opencv-contrib-python'!")
@@ -41,7 +36,7 @@ except AttributeError:
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-# --- STORAGE ---
+
 Combined_Features = []
 Labels = []
 Name_map = {}
@@ -177,8 +172,6 @@ def check_blink(landmarks):
     if left_dist < 0.012 and right_dist < 0.012: return True
     return False
 
-
-# --- MAIN LOOP ---
 cap = cv2.VideoCapture(0)
 cap.set(3, 640)
 cap.set(4, 480)
@@ -285,7 +278,6 @@ while True:
 
         print(f"[CAPTURE] Starting for {current_name_input}...")
 
-        # [FILE SIZE FIX] Loop breaks if we hit MAX_SAMPLES (20) OR timeout (10s)
         while (time.time() - start_time) < 10 and len(session_raw_faces) < MAX_SAMPLES:
             success, raw_img = cap.read()
             if not success: break
@@ -317,7 +309,7 @@ while True:
                 x, y, w, h = int(sx / PROCESS_SCALE), int(sy / PROCESS_SCALE), int(sw / PROCESS_SCALE), int(
                     sh / PROCESS_SCALE)
                 cv2.rectangle(raw_img, (x, y), (x + w, y + h), (0, 255, 255), 2)
-                # Show capture count progress
+
                 cv2.putText(raw_img, f"Captured: {len(session_raw_faces)}/{MAX_SAMPLES}", (30, 50),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 cv2.imshow("System", raw_img)
