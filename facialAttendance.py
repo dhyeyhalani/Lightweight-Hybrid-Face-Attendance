@@ -9,13 +9,17 @@ import pickle
 import mediapipe as mp
 import time
 
+# [OPTIMIZATION] Configuration Constants
 SKIP_BLINK_FRAMES = 2
-
 SKIP_RECOG_FRAMES = 10
 PROCESS_SCALE = 0.5
-TRAINING_SKIP = 5
 
+# [FILE SIZE FIX] Only capture every 10th frame to get variety
+TRAINING_SKIP = 10
+# [FILE SIZE FIX] Stop strictly after 15-20 samples. 60 is overkill.
+MAX_SAMPLES = 20
 
+# --- MEDIAPIPE SETUP ---
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh_detector = mp_face_mesh.FaceMesh(
     max_num_faces=1,
@@ -28,20 +32,22 @@ svm_model = SVC(kernel='linear', probability=True, C=1.0)
 scaler = StandardScaler()
 
 try:
-    lbph_model = cv2.face.LBPHFaceRecognizer_create(radius=1, neighbors=8, grid_x=8, grid_y=8)
+    # [FILE SIZE FIX] Reduced grid_x/grid_y from 8 to 5.
+    # This shrinks the histogram size for EACH image by ~60%.
+    lbph_model = cv2.face.LBPHFaceRecognizer_create(radius=1, neighbors=8, grid_x=5, grid_y=5)
 except AttributeError:
     print("[ERROR] Install 'opencv-contrib-python'!")
     exit()
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
+# --- STORAGE ---
 Combined_Features = []
 Labels = []
 Name_map = {}
 current_label_id = 0
 is_trained = False
 marked_present = set()
-
 
 blink_state = {"has_blinked": False, "last_face_id": -1}
 frame_count = 0
@@ -101,11 +107,13 @@ def load_today_attendance():
             if len(parts) >= 2 and parts[1] == today_str:
                 marked_present.add(parts[0])
 
+
 def get_landmarks_only(image_rgb):
     mesh_results = face_mesh_detector.process(image_rgb)
     if mesh_results.multi_face_landmarks:
         return mesh_results.multi_face_landmarks[0]
     return None
+
 
 def get_features_from_landmarks(image_gray, landmarks_obj):
     img_eq = cv2.equalizeHist(image_gray)
@@ -137,7 +145,6 @@ def mark_attendance(name):
 
 def train_hybrid(new_raw_faces, new_labels, new_features):
     global is_trained, svm_model, scaler, Combined_Features, Labels
-
     print(f"[TRAINING] Processing {len(new_labels)} new samples...")
 
     lbph_model.update(new_raw_faces, np.array(new_labels))
@@ -162,6 +169,7 @@ def train_hybrid(new_raw_faces, new_labels, new_features):
     save_system()
     print("[SYSTEM] Training Complete.")
 
+
 def check_blink(landmarks):
     if landmarks is None: return False
     left_dist = abs(landmarks.landmark[145].y - landmarks.landmark[159].y)
@@ -170,6 +178,7 @@ def check_blink(landmarks):
     return False
 
 
+# --- MAIN LOOP ---
 cap = cv2.VideoCapture(0)
 cap.set(3, 640)
 cap.set(4, 480)
@@ -194,6 +203,7 @@ while True:
     success, img = cap.read()
     if not success: break
     frame_count += 1
+
     small_img = cv2.resize(img, (0, 0), fx=PROCESS_SCALE, fy=PROCESS_SCALE)
     small_gray = cv2.cvtColor(small_img, cv2.COLOR_BGR2GRAY)
     small_faces = face_cascade.detectMultiScale(small_gray, scaleFactor=1.2, minNeighbors=5)
@@ -223,14 +233,12 @@ while True:
             if frame_count % SKIP_BLINK_FRAMES == 0:
                 landmarks = get_landmarks_only(face_roi_rgb_small)
                 cache["landmarks"] = landmarks
-
                 if check_blink(landmarks):
                     blink_state["has_blinked"] = True
                     cache["color"] = (0, 255, 0) if cache["name"] != "Unknown" else (0, 0, 255)
 
             if is_trained and (frame_count % SKIP_RECOG_FRAMES == 0 or blink_state["last_face_id"] == -1):
                 lm_to_use = cache["landmarks"] if cache["landmarks"] else get_landmarks_only(face_roi_rgb_small)
-
                 features = get_features_from_landmarks(face_roi_small, lm_to_use)
 
                 try:
@@ -258,6 +266,7 @@ while True:
                 else:
                     cache["name"] = "Unknown"
                     cache["color"] = (0, 0, 255)
+
     if cache["box"] is not None:
         (x, y, w, h) = cache["box"]
         p = 40
@@ -276,7 +285,8 @@ while True:
 
         print(f"[CAPTURE] Starting for {current_name_input}...")
 
-        while (time.time() - start_time) < 10:
+        # [FILE SIZE FIX] Loop breaks if we hit MAX_SAMPLES (20) OR timeout (10s)
+        while (time.time() - start_time) < 10 and len(session_raw_faces) < MAX_SAMPLES:
             success, raw_img = cap.read()
             if not success: break
             capture_frame_idx += 1
@@ -291,7 +301,7 @@ while True:
                 sx_b, sy_b = max(0, sx - p), max(0, sy - p)
                 sw_b, sh_b = min(s_img.shape[1] - sx_b, sw + 2 * p), min(s_img.shape[0] - sy_b, sh + 2 * p)
 
-                # [OPTIMIZATION] Odd/Even Subsampling
+                # [FILE SIZE FIX] Only save 1 out of 10 frames
                 if capture_frame_idx % TRAINING_SKIP == 0:
                     roi = s_gray[sy_b:sy_b + sh_b, sx_b:sx_b + sw_b]
                     roi_rgb = cv2.cvtColor(s_img[sy_b:sy_b + sh_b, sx_b:sx_b + sw_b], cv2.COLOR_BGR2RGB)
@@ -299,18 +309,17 @@ while True:
                     if roi.size > 0:
                         session_raw_faces.append(roi)
                         session_labels.append(current_label_id)
-
                         lm = get_landmarks_only(roi_rgb)
                         feats = get_features_from_landmarks(roi, lm)
                         session_features.append(feats)
-
                         cv2.rectangle(raw_img, (0, 0), (640, 480), (255, 255, 255), 5)
 
                 x, y, w, h = int(sx / PROCESS_SCALE), int(sy / PROCESS_SCALE), int(sw / PROCESS_SCALE), int(
                     sh / PROCESS_SCALE)
                 cv2.rectangle(raw_img, (x, y), (x + w, y + h), (0, 255, 255), 2)
-                cv2.putText(raw_img, f"Captured: {len(session_raw_faces)}", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                            (0, 255, 0), 2)
+                # Show capture count progress
+                cv2.putText(raw_img, f"Captured: {len(session_raw_faces)}/{MAX_SAMPLES}", (30, 50),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 cv2.imshow("System", raw_img)
                 cv2.waitKey(30)
             else:
