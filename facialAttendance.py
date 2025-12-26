@@ -9,14 +9,13 @@ import pickle
 import mediapipe as mp
 import time
 
-
 SKIP_BLINK_FRAMES = 2
 SKIP_RECOG_FRAMES = 10
 PROCESS_SCALE = 0.5
 
 TRAINING_SKIP = 10
-MAX_SAMPLES = 20
 
+MAX_SAMPLES = 20
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh_detector = mp_face_mesh.FaceMesh(
@@ -30,7 +29,6 @@ svm_model = SVC(kernel='linear', probability=True, C=1.0)
 scaler = StandardScaler()
 
 try:
-
     lbph_model = cv2.face.LBPHFaceRecognizer_create(radius=1, neighbors=8, grid_x=5, grid_y=5)
 except AttributeError:
     print("[ERROR] Install 'opencv-contrib-python'!")
@@ -174,8 +172,6 @@ def check_blink(landmarks):
     if left_dist < 0.012 and right_dist < 0.012: return True
     return False
 
-
-
 cap = cv2.VideoCapture(0)
 cap.set(3, 640)
 cap.set(4, 480)
@@ -313,7 +309,7 @@ while True:
                 x, y, w, h = int(sx / PROCESS_SCALE), int(sy / PROCESS_SCALE), int(sw / PROCESS_SCALE), int(
                     sh / PROCESS_SCALE)
                 cv2.rectangle(raw_img, (x, y), (x + w, y + h), (0, 255, 255), 2)
-                # Show capture count progress
+
                 cv2.putText(raw_img, f"Captured: {len(session_raw_faces)}/{MAX_SAMPLES}", (30, 50),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
                 cv2.imshow("System", raw_img)
