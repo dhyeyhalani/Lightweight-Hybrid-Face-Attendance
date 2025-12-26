@@ -21,23 +21,20 @@ A lightweight, CPU-optimized face recognition system that combines **Shape (HOG)
    cd Lightweight-Face-Attendance
 
 2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
 
-Bash
-pip install -r requirements.txt
 
+4. 🏃‍♂️ Usage
+   ```bash
+      python facialAttendance.py
+      Register a User: Press r to capture 10 seconds of data (automatically subsampled).
 
-🏃‍♂️ Usage
-Run the main script:
+      Mark Attendance: Stand in front of the camera. The system requires a Blink to verify liveness before logging.
 
-Bash
-python facialAttendance.py
-Register a User: Press r to capture 10 seconds of data (automatically subsampled).
-
-Mark Attendance: Stand in front of the camera. The system requires a Blink to verify liveness before logging.
-
-Logs: Attendance is saved in Attendance.csv.
-
-🧠 Architecture
+      Logs: Attendance is saved in Attendance.csv.
+ 
+5. 🧠 Architecture
 The Guard (Fast Loop): Runs every 2 frames. Checks for blinks using MediaPipe.
 
 The Detective (Slow Loop): Runs every 10 frames. Extracts HOG + Mesh features and classifies using SVM.
