@@ -44,7 +44,7 @@ The Detective (Slow Loop): Runs every 10 frames. Extracts HOG + Mesh features an
 
 
 #### C. `.gitignore` (The Filter)
-This file stops you from uploading junk. Create a file named `.gitignore` (no extension, just `.gitignore`) and paste this:
+This file stops you from uploading junk. Create a file named `.gitignore` (no extension, just `.gitignore`) and paste this (if and only if the given .gitignore file is giving you any error):
 
 ```text
 # Ignore Virtual Environment
